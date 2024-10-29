@@ -6,11 +6,13 @@ module AgilentBinParser
     , parseAgilentBinFormat
     , getWFFHeader
     , getWFData
+    , getWFHeader
     , convWFDataType
     , convWFDataTypeToFloat
     , toFloatFromW8
     , convOSCGraph
     , getOSCGraph
+    , getWFNpoint
     ) where
 
 import qualified Data.ByteString as BS
@@ -50,6 +52,7 @@ type WFYUnit = WFUnit
 data WFHeader = WFHeader WFHSize WFType WFNumWFBuffer WFNumPoint WFNumCount WFXOrigin WFXIncrement WFXUnit WFYUnit deriving (Show)
 getWFXOrigin (WFHeader _ _ _ _ _ o _ _ _ ) = o
 getWFXIncrement (WFHeader _ _ _ _ _ _ i _ _ ) = i
+getWFNpoint (WFHeader _ _ _ n _ _ _ _ _ ) = n
 
 data WForm = WForm WFHeader [WFData] deriving (Show)
 
@@ -145,7 +148,10 @@ convWFDataType f (WFData hraw draw) = WFDataConv hraw d
         d = map f $ split4 draw
         split4 l  = if ( length l ) < 4 
                        then []
-                       else ((take 4 l):(split4 (drop 4 l)))
+                       else (spf:(split4 sps))
+                           where
+                               (spf,sps) = splitAt 4 l
+
 
 convWFDataTypeToFloat = convWFDataType toFloatFromW8
 convWFDataTypeToDouble = convWFDataType (realToFrac . toFloatFromW8)
@@ -159,6 +165,12 @@ parseAgilentBinFormat bs = AgilentBinFormat fheader dlist
     where
         fheader = parseWFFHeader $ (BS.unpack . (BS.take 12)) bs
         dlist = parseWForm $ ((BS.unpack . BS.drop 12)) bs
+
+getWFHeader :: AgilentBinFormat -> WFHeader
+getWFHeader a = header
+    where
+        AgilentBinFormat _ dl = a
+        WForm header _ = dl
 
 getWFData :: AgilentBinFormat -> WFData
 getWFData a = head ds

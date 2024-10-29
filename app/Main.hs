@@ -32,5 +32,11 @@ main = do
     bs <- BS.readFile $ head nonOptions
     -- "./test/bmr_0v85d_2.bin"
     let a = ABP.parseAgilentBinFormat bs
+    let n = if np < 0
+               then npfile
+               else min np npfile
+                   where
+                       npfile = (getWFNpoint . getWFHeader) a
+
     -- putStrLn $ show a
-    putStrLn $ ((WFA.showCSVFormat ' ') . WFA.fromPairs . take np . ABP.getOSCGraph) a
+    putStrLn $ ((WFA.showCSVFormat ' ') . WFA.fromPairs . take n . ABP.getOSCGraph) a
