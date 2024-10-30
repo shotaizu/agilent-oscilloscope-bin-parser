@@ -50,14 +50,14 @@ type WFXUnit = WFUnit
 type WFYUnit = WFUnit
 
 data WFHeader = WFHeader WFHSize WFType WFNumWFBuffer WFNumPoint WFNumCount WFXOrigin WFXIncrement WFXUnit WFYUnit deriving (Show)
-getWFXOrigin (WFHeader _ _ _ _ _ o _ _ _ ) = o
+getWFXOrigin    (WFHeader _ _ _ _ _ o _ _ _ ) = o
 getWFXIncrement (WFHeader _ _ _ _ _ _ i _ _ ) = i
-getWFNpoint (WFHeader _ _ _ n _ _ _ _ _ ) = n
+getWFNpoint     (WFHeader _ _ _ n _ _ _ _ _ ) = n
 
-data WForm = WForm WFHeader [WFData] deriving (Show)
+data WForm = WForm WFHeader [WFDataConv Float] deriving (Show)
 
 type WFDHSize = Int
-data WFDBufferType = WFDBTUnknown | WFDBT32Float | WFDBTMaxFloat | WFDBTMinFloat | WFDBTOthers deriving (Show)
+data WFDBufferType = WFDBTUnknown | WFDBT32Float | WFDBTMaxFloat | WFDBTMinFloat | WFDBTOthers deriving (Show, Eq, Enum)
 type WFDBytesPerPoint = Int
 type WFDBufferSize = Int
 toWFDBType :: Int -> WFDBufferType
@@ -111,8 +111,8 @@ parseWFDHeader c = WFDHeader nhs dbt dbpp dbs
     where
         nhs = (fromChar . take 4) c
         dbt = (toWFDBType . fromChar . take 2 . drop 4) c
-        dbpp = (fromChar . take 2 . drop 4) c
-        dbs = (fromChar . take 4 . drop 4) c
+        dbpp = (fromChar . take 2 . drop 6) c
+        dbs = (fromChar . take 4 . drop 8) c
 
 parseWFData :: [Word8] -> WFData
 parseWFData c = WFData header d
@@ -122,11 +122,55 @@ parseWFData c = WFData header d
         header = parseWFDHeader h
         d = dbs
 
+
+parseWFDataConv :: [Word8] -> WFDataConv Float
+parseWFDataConv c = WFDataConv header d
+    where
+        h = take 12 c
+        dbs = drop 12 c
+        header = parseWFDHeader h
+        WFDHeader s t p b = header
+        d = if length dbs /= b
+               then []
+               else if t /= WFDBT32Float
+               then []
+               else split4conv dbs
+        split4conv l = if ( length l ) < 4 
+                       then []
+                       else ((toFloatFromW8 spf):(split4conv sps))
+                           where
+                               (spf,sps) = splitAt 4 l
+
+parseWFDataConv' :: BS.ByteString -> WFDataConv Float
+parseWFDataConv' c = WFDataConv header d
+    where
+        h = (BS.unpack . BS.take 12) c
+        dbs = BS.drop 12 c
+        header = parseWFDHeader h
+        WFDHeader s t p b = header
+        d = if BS.length dbs /= b
+               then []
+               else if t /= WFDBT32Float
+               then []
+               else split4conv dbs
+        split4conv l = if ( BS.length l ) < 4 
+                       then []
+                       else (((toFloatFromW8 . BS.unpack)spf):(split4conv sps))
+                           where
+                               (spf,sps) = BS.splitAt 4 l
+
+
 parseWForm :: [Word8] -> WForm
 parseWForm c = WForm wfh [wfd]
     where
         wfh = (parseWFHeader . take 140) c
-        wfd = (parseWFData . drop 140) c
+        wfd = (parseWFDataConv . drop 140) c
+        
+parseWForm' :: BS.ByteString -> WForm
+parseWForm' c = WForm wfh [wfd]
+    where
+        wfh = (parseWFHeader . BS.unpack . (BS.take 140)) c
+        wfd = (parseWFDataConv' . BS.drop 140) c
 
 
 
@@ -164,7 +208,8 @@ parseAgilentBinFormat :: BS.ByteString -> AgilentBinFormat
 parseAgilentBinFormat bs = AgilentBinFormat fheader dlist
     where
         fheader = parseWFFHeader $ (BS.unpack . (BS.take 12)) bs
-        dlist = parseWForm $ ((BS.unpack . BS.drop 12)) bs
+        -- dlist = parseWForm $ ((BS.unpack . BS.drop 12)) bs
+        dlist = parseWForm' $ BS.drop 12 bs
 
 getWFHeader :: AgilentBinFormat -> WFHeader
 getWFHeader a = header
@@ -172,7 +217,7 @@ getWFHeader a = header
         AgilentBinFormat _ dl = a
         WForm header _ = dl
 
-getWFData :: AgilentBinFormat -> WFData
+getWFData :: AgilentBinFormat -> WFDataConv Float
 getWFData a = head ds
     where
         AgilentBinFormat _ dl = a
@@ -187,7 +232,8 @@ getOSCGraph (AgilentBinFormat _ wf) = convOSCGraph xo xi dc
         WForm wfh (d:_) = wf
         xo = realToFrac $ getWFXOrigin wfh
         xi = realToFrac $ getWFXIncrement wfh
-        dc = convWFDataTypeToDouble d
+        WFDataConv header dlist = d
+        dc = WFDataConv header $ map realToFrac dlist
         -- dc = convWFDataTypeToFloat d
 
 
