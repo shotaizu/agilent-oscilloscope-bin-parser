@@ -1,10 +1,10 @@
 name:                agilent-oscilloscope-bin-parser
 version:             0.1.0.0
-github:              "githubuser/agilent-oscilloscope-bin-parser"
+github:              "shotaizu/agilent-oscilloscope-bin-parser"
 license:             BSD-3-Clause
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2024 Author name here"
+author:              "Shota Izumiyama"
+maintainer:          "shota@izumiyama.net"
+copyright:           "2024 Shota Izumiyama"
 
 extra-source-files:
 - README.md
